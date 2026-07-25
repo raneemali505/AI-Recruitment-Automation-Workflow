@@ -1,0 +1,733 @@
+{
+  "name": "AI-Recruitment-Automation-Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "id": "435cc362-0da7-4ad3-aad1-2a845fb12f62",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -464,
+        -464
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "xqjLOcuL0SHPWDil",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst updatedItems = items.map((item) => {\n  const hasAttachment = item?.json?.payload?.mimeType === \"multipart/mixed\";\n  const parts = item?.json?.payload?.parts;\n  const attachmentName = hasAttachment\n    ? parts?.[1]?.filename ?? null\n    : null;\n  const attachmentMimeType = hasAttachment\n    ? parts?.[1]?.mimeType ?? null\n    : null;\n\n  return {\n    json: {\n      sender_name: item?.json?.From,\n      sender_email: item?.json?.To,\n      subject: item?.json?.Subject,\n      body: item?.json?.snippet,\n      hasAttachment,\n      attachmentName,\n      attachmentMimeType,\n    },\n  };\n});\nreturn updatedItems;\n"
+      },
+      "id": "48137aad-c600-4995-a1e4-0ac22744494d",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4bbe7c67-a235-4881-993f-1c517079f8a7",
+              "leftValue": "={{ $json.hasAttachment }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c7970ff2-944c-4fab-9b57-0e650c828980",
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -64,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $('Gmail Trigger').item.json.id }}",
+        "simple": false,
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        192,
+        -480
+      ],
+      "id": "bb2ea704-314d-4c9a-ad20-4eda878781d6",
+      "name": "Get a message",
+      "webhookId": "8a61d1a3-4d12-4c49-bb24-d7d1b961f309",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "xqjLOcuL0SHPWDil",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "attachment_0",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        352,
+        -480
+      ],
+      "id": "c1a24abf-4e19-4f6c-9c9c-f4a00042eb81",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an AI recruitment assistant.\n\nAnalyze the following job application email and the attached resume.\n\nEmail Subject:\n{{ $('Code in JavaScript').item.json.subject }}\n\nEmail Body:\n{{ $('Code in JavaScript').item.json.body }}\n\nResume:\n{{ $('Extract from File').item.json.text }}\n\nImportant Instructions:\n\n- Do NOT compare the sender's name or email with the name inside the resume.\n- Ignore any differences between the email signature and the resume owner's name.\n- Assume the attached resume belongs to the applicant.\n- Evaluate only the application itself.\n- Base your decision only on the email content, the resume content, and the attachment status.\n\nClassify the application into exactly ONE of the following categories:\n\n- Valid Application\n- Missing Resume\n- Missing Contact Information\n- Unsupported File Format\n- Corrupted Resume\n- Duplicate Application\n- Spam or Irrelevant Email\n- Incomplete Application\n\nClassification Rules:\n\n1. Valid Application\n- A resume is attached.\n- The resume is readable.\n- The resume contains contact information (email or phone).\n- The resume contains education, skills, and experience.\n- Ignore differences between the sender's name and the resume owner's name.\n\n2. Missing Resume\n- No resume attachment is found.\n\n3. Missing Contact Information\n- The resume is readable but does not contain an email address or phone number.\n\n4. Unsupported File Format\n- The attached file is not PDF or DOCX.\n\n5. Corrupted Resume\n- The resume cannot be opened or its text cannot be extracted.\n\n6. Duplicate Application\n- The same applicant has already submitted the same application.\n\n7. Spam or Irrelevant Email\n- The email is not related to a job application.\n\n8. Incomplete Application\n- The resume is readable but is missing important sections such as education, skills, or experience.\n\nReturn ONLY valid JSON in this format:\n\n{\n  \"classification\": \"\",\n  \"confidence\": 0,\n  \"reason\": \"\"\n}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        496,
+        -480
+      ],
+      "id": "b81cda8f-42e4-460b-9970-75270a52b065",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAlibabaCloud",
+      "typeVersion": 1,
+      "position": [
+        496,
+        -256
+      ],
+      "id": "3578ddf5-bfae-438d-996c-016366ece074",
+      "name": "Qwen Cloud Chat Model",
+      "credentials": {
+        "alibabaCloudApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"classification\": \"Valid Application\",\n  \"confidence\": 98,\n  \"reason\": \"Resume attached and candidate information is complete.\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        640,
+        -256
+      ],
+      "id": "ab875007-05f1-4dc8-bef9-ca3023b0c63e",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "694347c1-c2db-48b4-a74c-21fa99f0b814",
+              "leftValue": "={{ $json.output.classification }}",
+              "rightValue": "Valid Application",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        784,
+        -480
+      ],
+      "id": "c8a931cd-e83e-41dc-87c4-dbc984d89a12",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an AI recruitment assistant.\n\nExtract the following information from the resume.\n\nResume:\n{{ $('Extract from File').item.json.text }}\n\nReturn ONLY valid JSON.\n\n{\n  \"name\": \"\",\n  \"email\": \"\",\n  \"phone\": \"\",\n  \"education\": \"\",\n  \"skills\": [],\n  \"experience\": \"\"\n}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        992,
+        -496
+      ],
+      "id": "ea22557b-fa58-4d3d-96ab-6b47cdd6d874",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAlibabaCloud",
+      "typeVersion": 1,
+      "position": [
+        992,
+        -240
+      ],
+      "id": "19cc7cfe-4fe4-4b3c-97cb-24be342afb60",
+      "name": "Qwen Cloud Chat Model1",
+      "credentials": {
+        "alibabaCloudApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"name\": \"\",\n  \"email\": \"\",\n  \"phone\": \"\",\n  \"education\": \"\",\n  \"skills\": [\n    \"\"\n  ],\n  \"experience\": \"\",\n  \"projects\": [\n    \"\"\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1136,
+        -240
+      ],
+      "id": "cde986fa-2583-443e-91c2-3209a3482a47",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1FPEip25qhm5vwFhQVULVPZ0XFLNHlwX7V3czCx6yjh8",
+          "mode": "list",
+          "cachedResultName": "Recruitment Candidates",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FPEip25qhm5vwFhQVULVPZ0XFLNHlwX7V3czCx6yjh8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Candidates",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FPEip25qhm5vwFhQVULVPZ0XFLNHlwX7V3czCx6yjh8/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json.output.name }}",
+            "Email": "={{ $json.output.email }}",
+            "Education": "={{ $json.output.education }}",
+            "Skills": "={{ $json.output.skills.join(\", \") }}",
+            "Experience": "={{ $json.output.experience }}",
+            "Phone": "={{ \"'\" + $json.output.phone }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Phone",
+              "displayName": "Phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Education",
+              "displayName": "Education",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Skills",
+              "displayName": "Skills",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Experience",
+              "displayName": "Experience",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1344,
+        -496
+      ],
+      "id": "c92ddc31-86a7-4aaf-b90e-a215f5d4fc27",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "tM5EDGMzat5MkS5O",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an AI recruitment assistant.\n\nCompare the following resume with the job description.\n\nJob Description:\n\nAI Engineer\n\nRequirements:\n- Python\n- Machine Learning\n- SQL\n- Data Analysis\n- NLP\n- Docker\n- Git\n- Communication Skills\n- Teamwork\n- Problem Solving\n\nResume:\n\n{{ $('Extract from File').item.json.text }}\n\nReturn ONLY valid JSON in this format:\n\n{\n  \"score\": 0,\n  \"reason\": \"\"\n}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1552,
+        -496
+      ],
+      "id": "66dbda85-cfff-4ff4-bdc1-c5bedacbc332",
+      "name": "AI Agent2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAlibabaCloud",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        -288
+      ],
+      "id": "1b1628c2-9bab-4baa-a280-ac0701db497b",
+      "name": "Qwen Cloud Chat Model2",
+      "credentials": {
+        "alibabaCloudApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"score\": {\n      \"type\": \"number\"\n    },\n    \"reason\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"score\",\n    \"reason\"\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1696,
+        -288
+      ],
+      "id": "ce9b58d7-a944-41e3-a366-79e7f5d63694",
+      "name": "Structured Output Parser2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c5542718-e53d-4a76-92d9-e4590b764fe1",
+              "leftValue": "={{ $json.output.score }}",
+              "rightValue": 70,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1904,
+        -496
+      ],
+      "id": "f0909f06-367a-477c-9abe-378cd81a1164",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "sendTo": "aliraneem505@gmail.com",
+        "subject": "New Candidate Passed Initial Screening",
+        "message": "=<h2>New Candidate Passed Initial Screening</h2>  <p>A new candidate has successfully passed the initial AI screening.</p>  <b>Name:</b> {{ $('AI Agent1').item.json.output.name }}<br>  <b>Email:</b> {{ $('AI Agent1').item.json.output.email }}<br>  <b>Phone:</b> {{ $('AI Agent1').item.json.output.phone }}<br>  <b>Education:</b> {{ $('AI Agent1').item.json.output.education }}<br><br>  <b>Suitability Score:</b> {{ $('AI Agent2').item.json.output.score }}%<br><br>  <b>Reason:</b><br> {{ $('AI Agent2').item.json.output.reason }}  <br><br>  Please review the candidate and continue the recruitment process.  <br><br>  Regards,<br> AI Recruitment Assistant",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2144,
+        -512
+      ],
+      "id": "3f7ca75a-f207-4772-a562-141765c827e0",
+      "name": "Send a message",
+      "webhookId": "4ea19c34-df18-4e45-bf50-3d8d96511c89",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "xqjLOcuL0SHPWDil",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('AI Agent1').item.json.output.email }}",
+        "subject": "Application Received Successfully",
+        "message": "=<h2>Application Received Successfully</h2>\n\n<p>Dear <b>{{ $('AI Agent1').item.json.output.name }}</b>,</p>\n\n<p>Thank you for applying for our position.</p>\n\n<p>We are pleased to inform you that your application has successfully passed the initial AI screening.</p>\n\n<p>Your application will now be reviewed by our HR team. If you are shortlisted, we will contact you regarding the next stage of the recruitment process.</p>\n\n<p>Thank you for your interest in joining our company.</p>\n\n<br>\n\n<p>Best Regards,</p>\n\n<p><b>HR Team</b></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2304,
+        -512
+      ],
+      "id": "721e496e-3667-495b-864c-1a9ecd5a4b9b",
+      "name": "Send a message1",
+      "webhookId": "4ea19c34-df18-4e45-bf50-3d8d96511c89",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "xqjLOcuL0SHPWDil",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('AI Agent1').item.json.output.email }}",
+        "subject": "Application Status Update",
+        "message": "=<h2>Application Status Update</h2>  <p>Dear <b>{{ $('AI Agent1').item.json.output.name }}</b>,</p>  <p>Thank you for applying for our position.</p>  <p>After the initial AI screening, your application did not meet the required criteria for this position.</p>  <p>Unfortunately, we will not be moving forward with your application at this time.</p>  <p>We appreciate your interest in our company and encourage you to apply again in the future.</p>  <p>Best Regards,</p>  <p><b>HR Team</b></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2112,
+        -336
+      ],
+      "id": "84486254-7dc7-4dae-ae57-16c0848c4dea",
+      "name": "Send a message2",
+      "webhookId": "8445eb19-0f70-4f7d-b0a4-05fcfb6c0d1b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "xqjLOcuL0SHPWDil",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a message": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qwen Cloud Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qwen Cloud Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qwen Cloud Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser2": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent2": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "010d1303-9b5c-4816-acbb-3b55b35c83b5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "79b370ec466258b4c0edfd1f4a4948614314837401efb63b6d639d3dc48fd212"
+  },
+  "nodeGroups": [],
+  "id": "mIshBK2a9tRaER0X",
+  "tags": []
+}
